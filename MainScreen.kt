@@ -1,5 +1,6 @@
 package com.example.weekly168
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -7,9 +8,23 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
+// Função simples para definir cores baseadas no nome da tarefa
+fun corDaTarefa(tarefa: String): Color {
+    val t = tarefa.lowercase()
+    return when {
+        t.contains("sono") || t.contains("dormir") || t.contains("descanso") -> Color(0xFF1E88E5) // Azul
+        t.contains("trabalho") || t.contains("trabalhar") || t.contains("trampo") -> Color(0xFFD32F2F) // Vermelho
+        t.contains("estudo") || t.contains("faculdade") || t.contains("curso") || t.contains("leitura") -> Color(0xFF7B1FA2) // Roxo
+        t.contains("lazer") || t.contains("exercicio") || t.contains("academia") || t.contains("lazer") -> Color(0xFF388E3C) // Verde
+        t.contains("alimentação") || t.contains("almoço") || t.contains("jantar") || t.contains("comer") -> Color(0xFFF57C00) // Laranja
+        else -> Color(0xFF616161) // Cinza para tarefas livres ou não definidas
+    }
+}
 
 @Composable
 fun MainScreen(manager: SemanaManager) {
@@ -18,15 +33,16 @@ fun MainScreen(manager: SemanaManager) {
     var mostrarModalLote by remember { mutableStateOf(false) }
 
     val blocoAtual = manager.getBlocoAtual()
+    val corAtual = corDaTarefa(blocoAtual?.tarefa ?: "")
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        // --- DESTAQUE DA HORA ATUAL ---
+        // --- DESTAQUE DA HORA ATUAL (Com cor temática da tarefa) ---
         Card(
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+            colors = CardDefaults.cardColors(containerColor = corAtual.copy(alpha = 0.2f)),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 12.dp)
@@ -36,14 +52,14 @@ fun MainScreen(manager: SemanaManager) {
                     text = "AGORA (${blocoAtual?.dia?.nomeExibicao ?: ""} - ${blocoAtual?.hora ?: 0}h)",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                    color = corAtual
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = if (blocoAtual?.tarefa.isNull軽OrEmpty()) "Nenhuma tarefa cadastrada" else blocoAtual!!.tarefa,
+                    text = if (blocoAtual?.tarefa.isNullOrEmpty()) "Nenhuma tarefa cadastrada" else blocoAtual!!.tarefa,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                    color = corAtual
                 )
             }
         }
@@ -101,6 +117,7 @@ fun MainScreen(manager: SemanaManager) {
             items(blocosDoDia) { bloco ->
                 ItemHorarioRow(bloco = bloco) {
                     manager.salvarDados()
+                    refreshTrigger++ // Atualiza a cor se o nome da tarefa mudar
                 }
             }
         }
@@ -123,10 +140,12 @@ fun MainScreen(manager: SemanaManager) {
 @Composable
 fun ItemHorarioRow(bloco: BlocoHorario, onAcaoDigitada: () -> Unit) {
     var textoTarefa by remember(bloco.tarefa) { mutableStateOf(bloco.tarefa) }
+    val corItem = corDaTarefa(textoTarefa)
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Row(
             modifier = Modifier
@@ -134,12 +153,22 @@ fun ItemHorarioRow(bloco: BlocoHorario, onAcaoDigitada: () -> Unit) {
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Indicador visual de cor na lateral do horário
+            Box(
+                modifier = Modifier
+                    .width(4.dp)
+                    .height(40.dp)
+                    .background(corItem)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+
             Text(
                 text = "${bloco.hora.toString().padStart(2, '0')}:00",
                 fontWeight = FontWeight.Bold,
                 fontSize = 16.sp,
-                modifier = Modifier.width(60.dp)
+                modifier = Modifier.width(55.dp)
             )
+            
             OutlinedTextField(
                 value = textoTarefa,
                 onValueChange = { 
