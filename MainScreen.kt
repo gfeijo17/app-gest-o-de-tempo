@@ -12,9 +12,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun MainScreen(manager: SemanaManager = remember { SemanaManager() }) {
+fun MainScreen(manager: SemanaManager) {
     var diaSelecionado by remember { mutableStateOf(DiaDaSemana.SEGUNDA) }
-    var refreshTrigger by remember { mutableStateOf(0) } // Força a atualização da tela
+    var refreshTrigger by remember { mutableStateOf(0) }
+    var mostrarModalLote by remember { mutableStateOf(false) }
+
     val blocoAtual = manager.getBlocoAtual()
 
     Column(
@@ -27,7 +29,7 @@ fun MainScreen(manager: SemanaManager = remember { SemanaManager() }) {
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 16.dp)
+                .padding(bottom = 12.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
@@ -38,7 +40,7 @@ fun MainScreen(manager: SemanaManager = remember { SemanaManager() }) {
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = blocoAtual?.tarefa ?: "Nenhuma tarefa",
+                    text = if (blocoAtual?.tarefa.isNull軽OrEmpty()) "Nenhuma tarefa cadastrada" else blocoAtual!!.tarefa,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -49,21 +51,24 @@ fun MainScreen(manager: SemanaManager = remember { SemanaManager() }) {
         Divider()
         Spacer(modifier = Modifier.height(8.dp))
 
-        // --- CABEÇALHO E FERRAMENTA DE CÓPIA ---
+        // --- BARRA DE FERRAMENTAS / BOTÕES ---
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(text = "Planejamento (168h)", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            
-            // Botão para replicar o dia atual para os dias úteis (Terça a Sexta)
             Button(
+                onClick = { mostrarModalLote = true },
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+            ) {
+                Text("Preencher em Lote", fontSize = 12.sp)
+            }
+
+            OutlinedButton(
                 onClick = {
                     manager.copiarDiaParaDiasUteis(diaSelecionado)
-                    refreshTrigger++ // Recarrega a UI
-                },
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    refreshTrigger++
+                }
             ) {
                 Text("Copiar p/ Dias Úteis", fontSize = 12.sp)
             }
@@ -89,17 +94,34 @@ fun MainScreen(manager: SemanaManager = remember { SemanaManager() }) {
             manager.blocos168Horas.filter { it.dia == diaSelecionado }
         }
 
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.weight(1f)
+        ) {
             items(blocosDoDia) { bloco ->
-                ItemHorarioRow(bloco = bloco)
+                ItemHorarioRow(bloco = bloco) {
+                    manager.salvarDados()
+                }
             }
         }
+    }
+
+    // --- MODAL / DIÁLOGO DE PREENCHIMENTO EM LOTE ---
+    if (mostrarModalLote) {
+        DialogPreenchimentoLote(
+            onDismiss = { mostrarModalLote = false },
+            onConfirm = { inicio, fim, tarefa ->
+                manager.preencherLote(DiaDaSemana.values().toList(), inicio, fim, tarefa)
+                refreshTrigger++
+                mostrarModalLote = false
+            }
+        )
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ItemHorarioRow(bloco: BlocoHorario) {
+fun ItemHorarioRow(bloco: BlocoHorario, onAcaoDigitada: () -> Unit) {
     var textoTarefa by remember(bloco.tarefa) { mutableStateOf(bloco.tarefa) }
 
     Card(
@@ -123,6 +145,7 @@ fun ItemHorarioRow(bloco: BlocoHorario) {
                 onValueChange = { 
                     textoTarefa = it
                     bloco.tarefa = it
+                    onAcaoDigitada()
                 },
                 label = { Text("Tarefa / Atividade") },
                 singleLine = true,
@@ -130,4 +153,52 @@ fun ItemHorarioRow(bloco: BlocoHorario) {
             )
         }
     }
+}
+
+@Composable
+fun DialogPreenchimentoLote(
+    onDismiss: () -> Unit,
+    onConfirm: (horaInicio: Int, horaFim: Int, tarefa: String) -> Unit
+) {
+    var inicioStr by remember { mutableStateOf("23") }
+    var fimStr by remember { mutableStateOf("6") }
+    var tarefaInput by remember { mutableStateOf("Sono") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Preencher em Lote (Toda a Semana)") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = tarefaInput,
+                    onValueChange = { tarefaInput = it },
+                    label = { Text("Nome da Tarefa (Ex: Sono, Trabalho)") }
+                )
+                OutlinedTextField(
+                    value = inicioStr,
+                    onValueChange = { inicioStr = it },
+                    label = { Text("Hora Inicial (0 a 23)") }
+                )
+                OutlinedTextField(
+                    value = fimStr,
+                    onValueChange = { fimStr = it },
+                    label = { Text("Hora Final (0 a 23)") }
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                val inicio = inicioStr.toIntOrNull() ?: 0
+                val fim = fimStr.toIntOrNull() ?: 0
+                onConfirm(inicio, fim, tarefaInput)
+            }) {
+                Text("Aplicar nas 168h")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancelar")
+            }
+        }
+    )
 }
