@@ -13,16 +13,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-// Função simples para definir cores baseadas no nome da tarefa
 fun corDaTarefa(tarefa: String): Color {
     val t = tarefa.lowercase()
     return when {
         t.contains("sono") || t.contains("dormir") || t.contains("descanso") -> Color(0xFF1E88E5) // Azul
         t.contains("trabalho") || t.contains("trabalhar") || t.contains("trampo") -> Color(0xFFD32F2F) // Vermelho
         t.contains("estudo") || t.contains("faculdade") || t.contains("curso") || t.contains("leitura") -> Color(0xFF7B1FA2) // Roxo
-        t.contains("lazer") || t.contains("exercicio") || t.contains("academia") || t.contains("lazer") -> Color(0xFF388E3C) // Verde
+        t.contains("lazer") || t.contains("exercicio") || t.contains("academia") -> Color(0xFF388E3C) // Verde
         t.contains("alimentação") || t.contains("almoço") || t.contains("jantar") || t.contains("comer") -> Color(0xFFF57C00) // Laranja
-        else -> Color(0xFF616161) // Cinza para tarefas livres ou não definidas
+        else -> Color(0xFF616161) // Cinza
     }
 }
 
@@ -31,6 +30,7 @@ fun MainScreen(manager: SemanaManager) {
     var diaSelecionado by remember { mutableStateOf(DiaDaSemana.SEGUNDA) }
     var refreshTrigger by remember { mutableStateOf(0) }
     var mostrarModalLote by remember { mutableStateOf(false) }
+    var mostrarModalEstatisticas by remember { mutableStateOf(false) }
 
     val blocoAtual = manager.getBlocoAtual()
     val corAtual = corDaTarefa(blocoAtual?.tarefa ?: "")
@@ -40,7 +40,7 @@ fun MainScreen(manager: SemanaManager) {
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        // --- DESTAQUE DA HORA ATUAL (Com cor temática da tarefa) ---
+        // --- DESTAQUE DA HORA ATUAL ---
         Card(
             colors = CardDefaults.cardColors(containerColor = corAtual.copy(alpha = 0.2f)),
             modifier = Modifier
@@ -67,7 +67,7 @@ fun MainScreen(manager: SemanaManager) {
         Divider()
         Spacer(modifier = Modifier.height(8.dp))
 
-        // --- BARRA DE FERRAMENTAS / BOTÕES ---
+        // --- BARRA DE FERRAMENTAS ---
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -77,7 +77,14 @@ fun MainScreen(manager: SemanaManager) {
                 onClick = { mostrarModalLote = true },
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
             ) {
-                Text("Preencher em Lote", fontSize = 12.sp)
+                Text("Preencher Lote", fontSize = 11.sp)
+            }
+
+            Button(
+                onClick = { mostrarModalEstatisticas = true },
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)
+            ) {
+                Text("📊 Resumo 168h", fontSize = 11.sp)
             }
 
             OutlinedButton(
@@ -86,13 +93,13 @@ fun MainScreen(manager: SemanaManager) {
                     refreshTrigger++
                 }
             ) {
-                Text("Copiar p/ Dias Úteis", fontSize = 12.sp)
+                Text("Copiar p/ Úteis", fontSize = 11.sp)
             }
         }
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // --- SELETOR DE DIAS DA SEMANA ---
+        // --- SELETOR DE DIAS ---
         ScrollableTabRow(selectedTabIndex = diaSelecionado.ordinal) {
             DiaDaSemana.values().forEach { dia ->
                 Tab(
@@ -105,7 +112,7 @@ fun MainScreen(manager: SemanaManager) {
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // --- LISTA DAS 24 HORAS DO DIA SELECIONADO ---
+        // --- LISTA DE 24 HORAS DO DIA SELECIONADO ---
         val blocosDoDia = remember(diaSelecionado, refreshTrigger) {
             manager.blocos168Horas.filter { it.dia == diaSelecionado }
         }
@@ -117,13 +124,13 @@ fun MainScreen(manager: SemanaManager) {
             items(blocosDoDia) { bloco ->
                 ItemHorarioRow(bloco = bloco) {
                     manager.salvarDados()
-                    refreshTrigger++ // Atualiza a cor se o nome da tarefa mudar
+                    refreshTrigger++
                 }
             }
         }
     }
 
-    // --- MODAL / DIÁLOGO DE PREENCHIMENTO EM LOTE ---
+    // MODAL DE PREENCHIMENTO EM LOTE
     if (mostrarModalLote) {
         DialogPreenchimentoLote(
             onDismiss = { mostrarModalLote = false },
@@ -132,6 +139,14 @@ fun MainScreen(manager: SemanaManager) {
                 refreshTrigger++
                 mostrarModalLote = false
             }
+        )
+    }
+
+    // MODAL DE ESTATÍSTICAS (RESUMO 168h)
+    if (mostrarModalEstatisticas) {
+        DialogEstatisticas(
+            resumo = manager.calcularEstatistica(),
+            onDismiss = { mostrarModalEstatisticas = false }
         )
     }
 }
@@ -153,7 +168,6 @@ fun ItemHorarioRow(bloco: BlocoHorario, onAcaoDigitada: () -> Unit) {
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Indicador visual de cor na lateral do horário
             Box(
                 modifier = Modifier
                     .width(4.dp)
@@ -225,9 +239,37 @@ fun DialogPreenchimentoLote(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancelar")
+            TextButton(onClick = onDismiss) { Text("Cancelar") }
+        }
+    )
+}
+
+@Composable
+fun DialogEstatisticas(resumo: Map<String, Int>, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("📊 Resumo Semanal (168h Total)", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                resumo.forEach { (cat, horas) ->
+                    val porc = (horas.toFloat() / 168f * 100f)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(text = cat, fontWeight = FontWeight.Medium)
+                        Text(
+                            text = "${horas}h (${String.format("%.1f", porc)}%)",
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Divider()
+                }
             }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss) { Text("Fechar") }
         }
     )
 }
