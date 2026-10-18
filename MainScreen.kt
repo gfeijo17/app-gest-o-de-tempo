@@ -1,6 +1,5 @@
 package com.example.weekly168
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -8,7 +7,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -16,6 +14,7 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun MainScreen(manager: SemanaManager = remember { SemanaManager() }) {
     var diaSelecionado by remember { mutableStateOf(DiaDaSemana.SEGUNDA) }
+    var refreshTrigger by remember { mutableStateOf(0) } // Força a atualização da tela
     val blocoAtual = manager.getBlocoAtual()
 
     Column(
@@ -50,16 +49,35 @@ fun MainScreen(manager: SemanaManager = remember { SemanaManager() }) {
         Divider()
         Spacer(modifier = Modifier.height(8.dp))
 
-        // --- SELETOR DE DIAS DA SEMANA ---
-        Text(text = "Planejamento Semanal (168h)", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        // --- CABEÇALHO E FERRAMENTA DE CÓPIA ---
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(text = "Planejamento (168h)", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            
+            // Botão para replicar o dia atual para os dias úteis (Terça a Sexta)
+            Button(
+                onClick = {
+                    manager.copiarDiaParaDiasUteis(diaSelecionado)
+                    refreshTrigger++ // Recarrega a UI
+                },
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+            ) {
+                Text("Copiar p/ Dias Úteis", fontSize = 12.sp)
+            }
+        }
+
         Spacer(modifier = Modifier.height(8.dp))
-        
+
+        // --- SELETOR DE DIAS DA SEMANA ---
         ScrollableTabRow(selectedTabIndex = diaSelecionado.ordinal) {
             DiaDaSemana.values().forEach { dia ->
                 Tab(
                     selected = diaSelecionado == dia,
                     onClick = { diaSelecionado = dia },
-                    text = { Text(dia.nomeExibicao.take(3)) } // Exibe "Seg", "Ter", etc.
+                    text = { Text(dia.nomeExibicao.take(3)) }
                 )
             }
         }
@@ -67,7 +85,9 @@ fun MainScreen(manager: SemanaManager = remember { SemanaManager() }) {
         Spacer(modifier = Modifier.height(8.dp))
 
         // --- LISTA DAS 24 HORAS DO DIA SELECIONADO ---
-        val blocosDoDia = manager.blocos168Horas.filter { it.dia == diaSelecionado }
+        val blocosDoDia = remember(diaSelecionado, refreshTrigger) {
+            manager.blocos168Horas.filter { it.dia == diaSelecionado }
+        }
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(blocosDoDia) { bloco ->
@@ -80,7 +100,7 @@ fun MainScreen(manager: SemanaManager = remember { SemanaManager() }) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ItemHorarioRow(bloco: BlocoHorario) {
-    var textoTarefa by remember { mutableStateOf(bloco.tarefa) }
+    var textoTarefa by remember(bloco.tarefa) { mutableStateOf(bloco.tarefa) }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
